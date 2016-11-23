@@ -14,9 +14,9 @@ NUM_CHANNELS = 3
 IMAGE_SIZE = 128
 NUM_LABELS = 8
 VALIDATION_SIZE = 1000  # Size of the validation set.
-BATCH_SIZE = 64
-NUM_EPOCHS = 10
-EVAL_BATCH_SIZE = 64
+BATCH_SIZE = 300
+NUM_EPOCHS = 3000
+EVAL_BATCH_SIZE = 300
 EVAL_FREQUENCY = 10  # Number of steps between evaluations.
 SEED = 10
 
@@ -36,10 +36,6 @@ def extract_data(begin, end):
     data = np.zeros((end - begin, IMAGE_SIZE, IMAGE_SIZE, 3))
     for i, filename in enumerate(filenames):
         image = ndimage.imread(filename, flatten=False)
-        # image = misc.imresize(image, 0.5)
-        # image = image.reshape(64, 64, 1)
-        # imgplot = plt.imshow(image)
-        # plt.pause(10000)
         data[i, :, :, :] = image
     if FLAGS.use_fp16:
         data = np.array(data, dtype=np.float16)
@@ -59,14 +55,15 @@ def extract_labels(begin, end):
 def data_type():
     """Return the type of the activations, weights, and placeholder variables."""
     if FLAGS.use_fp16:
-        return tf.float16
+        return np.float16
     else:
-        return tf.float32
+        return np.float32
 
 
 def error_rate(predictions, labels):
     """Return the error rate based on dense predictions and sparse labels."""
-    print predictions[1:10, :]
+    print np.argmax(predictions, 1)[1:10]
+    print labels[1:10]
     return 100.0 - (
         100.0 *
         np.sum(np.argmax(predictions, 1) == labels) /
@@ -108,7 +105,6 @@ def main(argv=None):  # pylint: disable=unused-argument
         train_labels = train_labels[VALIDATION_SIZE:]
         num_epochs = NUM_EPOCHS
     train_size = train_labels.shape[0]
-    print train_data.shape
 
     # This is where training samples and labels are fed to the graph.
     # These placeholder nodes will be fed a batch of training data at each
@@ -116,7 +112,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     train_data_node = tf.placeholder(
             data_type(),
             shape=(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS))
-    train_labels_node = tf.placeholder(tf.int64, shape=(BATCH_SIZE,))
+    train_labels_node = tf.placeholder(np.int64, shape=(BATCH_SIZE,))
     eval_data = tf.placeholder(
             data_type(),
             shape=(EVAL_BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS))
@@ -125,21 +121,25 @@ def main(argv=None):  # pylint: disable=unused-argument
     # initial value which will be assigned when we call:
     # {tf.initialize_all_variables().run()}
     conv1_weights = tf.Variable(
-            tf.truncated_normal([5, 5, NUM_CHANNELS, 32],  # 5x5 filter, depth 32.
+            tf.truncated_normal([5, 5, NUM_CHANNELS, 15],  # 5x5 filter, depth 8.
                                 stddev=0.1,
                                 seed=SEED, dtype=data_type()))
-    conv1_biases = tf.Variable(tf.zeros([32], dtype=data_type()))
+    conv1_biases = tf.Variable(tf.zeros([15], dtype=data_type()))
     conv2_weights = tf.Variable(tf.truncated_normal(
-            [5, 5, 32, 64], stddev=0.1,
+            [5, 5, 15, 30], stddev=0.1,
             seed=SEED, dtype=data_type()))
-    conv2_biases = tf.Variable(tf.constant(0.1, shape=[64], dtype=data_type()))
+    conv2_biases = tf.Variable(tf.constant(0.1, shape=[30], dtype=data_type()))
+    conv3_weights = tf.Variable(tf.truncated_normal(
+            [5, 5, 30, 60], stddev=0.1,
+            seed=SEED, dtype=data_type()))
+    conv3_biases = tf.Variable(tf.constant(0.1, shape=[60], dtype=data_type()))
     fc1_weights = tf.Variable(  # fully connected, depth 512.
-            tf.truncated_normal([IMAGE_SIZE // 4 * IMAGE_SIZE // 4 * 64, 512],
+            tf.truncated_normal([IMAGE_SIZE // 4 * IMAGE_SIZE // 4 * 60, 150],
                                 stddev=0.1,
                                 seed=SEED,
                                 dtype=data_type()))
-    fc1_biases = tf.Variable(tf.constant(0.1, shape=[512], dtype=data_type()))
-    fc2_weights = tf.Variable(tf.truncated_normal([512, NUM_LABELS],
+    fc1_biases = tf.Variable(tf.constant(0.1, shape=[150], dtype=data_type()))
+    fc2_weights = tf.Variable(tf.truncated_normal([150, NUM_LABELS],
                                                   stddev=0.1,
                                                   seed=SEED,
                                                   dtype=data_type()))
@@ -174,11 +174,17 @@ def main(argv=None):  # pylint: disable=unused-argument
                               ksize=[1, 2, 2, 1],
                               strides=[1, 2, 2, 1],
                               padding='SAME')
+        conv = tf.nn.conv2d(pool,
+                            conv3_weights,
+                            strides=[1, 1, 1, 1],
+                            padding='SAME')
+        relu = tf.nn.relu(tf.nn.bias_add(conv, conv3_biases))
+
         # Reshape the feature map cuboid into a 2D matrix to feed it to the
         # fully connected layers.
-        pool_shape = pool.get_shape().as_list()
+        pool_shape = relu.get_shape().as_list()
         reshape = tf.reshape(
-                pool,
+                relu,
                 [pool_shape[0], pool_shape[1] * pool_shape[2] * pool_shape[3]])
         # Fully connected layer. Note that the '+' operation automatically
         # broadcasts the biases.
@@ -195,10 +201,10 @@ def main(argv=None):  # pylint: disable=unused-argument
             logits, train_labels_node))
 
     # L2 regularization for the fully connected parameters.
-    regularizers = (tf.nn.l2_loss(fc1_weights) + tf.nn.l2_loss(fc1_biases) +
-                    tf.nn.l2_loss(fc2_weights) + tf.nn.l2_loss(fc2_biases))
+    # regularizers = (tf.nn.l2_loss(fc1_weights) + tf.nn.l2_loss(fc1_biases) +
+    #                 tf.nn.l2_loss(fc2_weights) + tf.nn.l2_loss(fc2_biases))
     # Add the regularization term to the loss.
-    loss += 5e-4 * regularizers
+    # loss += 5e-4 * regularizers
 
     # Optimizer: set up a variable that's incremented once per batch and
     # controls the learning rate decay.

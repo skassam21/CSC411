@@ -240,14 +240,15 @@ def main(_):
     batch = tf.Variable(0, dtype=data_type())
     # Decay once per epoch, using an exponential schedule starting at 0.01.
     learning_rate = tf.train.exponential_decay(
-            0.01,  # Base learning rate.
+            0.1,  # Base learning rate.
             batch * BATCH_SIZE,  # Current index into the dataset.
             train_size,  # Decay step.
             0.95,  # Decay rate.
             staircase=True)
     # Use simple momentum for the optimization.
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
-
+    optimizer = tf.train.MomentumOptimizer(learning_rate,
+                                           0.9).minimize(loss,
+                                                         global_step=batch)
     # Predictions for the current training minibatch.
     train_prediction = tf.nn.softmax(logits)
 
