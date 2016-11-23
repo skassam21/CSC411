@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 import sys
+import numpy as np
 from scipy import ndimage
 from scipy import misc
-import numpy as np
 import os
 import csv
 import tensorflow as tf
@@ -19,6 +19,7 @@ NUM_EPOCHS = 3000
 EVAL_BATCH_SIZE = 300
 EVAL_FREQUENCY = 10  # Number of steps between evaluations.
 SEED = 10
+PIXEL_DEPTH = 255
 
 tf.app.flags.DEFINE_boolean("self_test", False, "True if running a self test.")
 tf.app.flags.DEFINE_boolean('use_fp16', False,
@@ -31,12 +32,14 @@ FLAGS = tf.app.flags.FLAGS
 
 def extract_data(begin, end):
     """Extract the images into a 4D tensor [image index, y, x, channels].
+    Values are rescaled from [0, 255] down to [-0.5, 0.5].
   """
     filenames = [os.path.join('411a3/train/%05d.jpg' % i) for i in xrange(begin + 1, end + 1)]
     data = np.zeros((end - begin, IMAGE_SIZE, IMAGE_SIZE, 3))
     for i, filename in enumerate(filenames):
         image = ndimage.imread(filename, flatten=False)
         data[i, :, :, :] = image
+        data[i, :, :, :] = (data[i, :, :, :] - (PIXEL_DEPTH / 2.0)) / PIXEL_DEPTH
     if FLAGS.use_fp16:
         data = np.array(data, dtype=np.float16)
     else:
