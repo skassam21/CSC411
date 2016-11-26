@@ -65,6 +65,15 @@ FLAGS = Flags()
 #                             """Whether to log device placement.""")
 
 
+def error_rate(predictions, labels):
+    """Return the error rate based on dense predictions and sparse labels."""
+    print(np.argmax(predictions, 1)[1:100])
+    print(labels[1:100])
+    return 100.0 - (
+        100.0 *
+        np.sum(np.argmax(predictions, 1) == labels) /
+        predictions.shape[0])
+
 def train():
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default():
@@ -78,7 +87,7 @@ def train():
     # Build a Graph that computes the logits predictions from the
     # inference model.
     logits = cifar.inference(images)
-    print(logits)
+    train_prediction = tf.nn.softmax(logits)
 
     # Calculate loss.
     loss = cifar.loss(logits, labels)
@@ -108,7 +117,8 @@ def train():
 
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()
-      _, loss_value = sess.run([train_op, loss])
+      predictions, _, loss_value, processed_labels = sess.run([train_prediction, train_op, loss, labels])
+      print(error_rate(predictions, processed_labels))
       duration = time.time() - start_time
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
@@ -129,7 +139,7 @@ def train():
 
       # Save the model checkpoint periodically.
       if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
-        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
+        checkpoint_path = os.path.join(FLAGS.train_dir, 'model_2.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
 
 

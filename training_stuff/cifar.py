@@ -47,7 +47,7 @@ import tensorflow as tf
 from training_stuff import cifar_input
 
 class Flags(object):
-  batch_size = 100
+  batch_size = 1000
   data_dir = '/tmp/cifar10_data'
   use_fp16 = False
 

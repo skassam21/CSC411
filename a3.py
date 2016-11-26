@@ -11,14 +11,15 @@ import csv
 import tensorflow as tf
 
 NUM_CHANNELS = 3
-IMAGE_SIZE = 128
+IMAGE_SIZE = 64
+IMAGE_RED = 0.5
 NUM_LABELS = 8
 VALIDATION_SIZE = 1000  # Size of the validation set.
 BATCH_SIZE = 300
 NUM_EPOCHS = 3000
 EVAL_BATCH_SIZE = 300
-EVAL_FREQUENCY = 10  # Number of steps between evaluations.
-SEED = 10
+EVAL_FREQUENCY = 100  # Number of steps between evaluations.
+SEED = 66478  # Set to None for random seed.
 PIXEL_DEPTH = 255
 
 tf.app.flags.DEFINE_boolean("self_test", False, "True if running a self test.")
@@ -35,9 +36,10 @@ def extract_data(begin, end):
     Values are rescaled from [0, 255] down to [-0.5, 0.5].
   """
     filenames = [os.path.join('411a3/train/%05d.jpg' % i) for i in xrange(begin + 1, end + 1)]
-    data = np.zeros((end - begin, IMAGE_SIZE, IMAGE_SIZE, 3))
+    data = np.zeros((end - begin, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS))
     for i, filename in enumerate(filenames):
-        image = ndimage.imread(filename, flatten=False)
+        image = ndimage.imread(filename, flatten=True)
+        image = misc.imresize(image, IMAGE_RED).reshape(IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS)
         data[i, :, :, :] = image
         data[i, :, :, :] = (data[i, :, :, :] - (PIXEL_DEPTH / 2.0)) / PIXEL_DEPTH
     if FLAGS.use_fp16:
@@ -65,8 +67,8 @@ def data_type():
 
 def error_rate(predictions, labels):
     """Return the error rate based on dense predictions and sparse labels."""
-    print np.argmax(predictions, 1)[1:10]
-    print labels[1:10]
+    print np.argmax(predictions, 1)[1:100]
+    print labels[1:100]
     return 100.0 - (
         100.0 *
         np.sum(np.argmax(predictions, 1) == labels) /
@@ -86,6 +88,31 @@ def fake_data(num_images):
     return data, labels
 
 
+def shuffle_data(train_data, train_labels):
+    td_shape = train_data.shape
+    reshaped_data = train_data.reshape((td_shape[0], td_shape[1] * td_shape[2] * td_shape[3]))
+    all_data = np.zeros((td_shape[0],  td_shape[1] * td_shape[2] * td_shape[3] + 1))
+    all_data[:, :-1] = reshaped_data
+    all_data[:, -1] = train_labels
+    np.random.shuffle(all_data)
+    return all_data[:, :-1].reshape((td_shape[0], td_shape[1], td_shape[2], td_shape[3])), \
+           np.array(all_data[:, -1], dtype=np.int64)
+
+
+def rotate_images(train_data, train_labels):
+    td_shape = train_data.shape
+    all_data = np.zeros((td_shape[0] * 4, td_shape[1], td_shape[2], td_shape[3]))
+    train_data_rotated_90 = np.transpose(np.rot90(np.transpose(train_data, [1, 2, 0, 3])), [2, 0, 1, 3])
+    train_data_rotated_180 = np.transpose(np.rot90(np.transpose(train_data, [1, 2, 0, 3]), 2), [2, 0, 1, 3])
+    train_data_rotated_270 = np.transpose(np.rot90(np.transpose(train_data, [1, 2, 0, 3]), 3), [2, 0, 1, 3])
+    all_data[:td_shape[0], :, :, :] = train_data
+    all_data[td_shape[0]:td_shape[0]*2, :, :, :] = train_data_rotated_90
+    all_data[td_shape[0]*2:td_shape[0]*3, :, :, :] = train_data_rotated_180
+    all_data[td_shape[0]*3:td_shape[0]*4, :, :, :] = train_data_rotated_270
+    all_labels = np.concatenate((train_labels, train_labels, train_labels, train_labels))
+    return all_data, all_labels
+
+
 def main(argv=None):  # pylint: disable=unused-argument
     if FLAGS.self_test:
         print('Running self-test.')
@@ -101,13 +128,19 @@ def main(argv=None):  # pylint: disable=unused-argument
         test_data = extract_data(100, 200)
         test_labels = extract_labels(100, 200)
 
+        train_data, train_labels = shuffle_data(train_data, train_labels)
+
         # Generate a validation set.
         validation_data = train_data[:VALIDATION_SIZE, ...]
         validation_labels = train_labels[:VALIDATION_SIZE]
         train_data = train_data[VALIDATION_SIZE:, ...]
         train_labels = train_labels[VALIDATION_SIZE:]
+        train_data, train_labels = rotate_images(train_data, train_labels)
         num_epochs = NUM_EPOCHS
     train_size = train_labels.shape[0]
+    print(train_labels.shape)
+    print(train_data.shape)
+
 
     # This is where training samples and labels are fed to the graph.
     # These placeholder nodes will be fed a batch of training data at each
@@ -132,17 +165,13 @@ def main(argv=None):  # pylint: disable=unused-argument
             [5, 5, 15, 30], stddev=0.1,
             seed=SEED, dtype=data_type()))
     conv2_biases = tf.Variable(tf.constant(0.1, shape=[30], dtype=data_type()))
-    conv3_weights = tf.Variable(tf.truncated_normal(
-            [5, 5, 30, 60], stddev=0.1,
-            seed=SEED, dtype=data_type()))
-    conv3_biases = tf.Variable(tf.constant(0.1, shape=[60], dtype=data_type()))
     fc1_weights = tf.Variable(  # fully connected, depth 512.
-            tf.truncated_normal([IMAGE_SIZE // 4 * IMAGE_SIZE // 4 * 60, 150],
+            tf.truncated_normal([IMAGE_SIZE // 4 * IMAGE_SIZE // 4 * 30, 512],
                                 stddev=0.1,
                                 seed=SEED,
                                 dtype=data_type()))
-    fc1_biases = tf.Variable(tf.constant(0.1, shape=[150], dtype=data_type()))
-    fc2_weights = tf.Variable(tf.truncated_normal([150, NUM_LABELS],
+    fc1_biases = tf.Variable(tf.constant(0.1, shape=[512], dtype=data_type()))
+    fc2_weights = tf.Variable(tf.truncated_normal([512, NUM_LABELS],
                                                   stddev=0.1,
                                                   seed=SEED,
                                                   dtype=data_type()))
@@ -177,17 +206,12 @@ def main(argv=None):  # pylint: disable=unused-argument
                               ksize=[1, 2, 2, 1],
                               strides=[1, 2, 2, 1],
                               padding='SAME')
-        conv = tf.nn.conv2d(pool,
-                            conv3_weights,
-                            strides=[1, 1, 1, 1],
-                            padding='SAME')
-        relu = tf.nn.relu(tf.nn.bias_add(conv, conv3_biases))
 
         # Reshape the feature map cuboid into a 2D matrix to feed it to the
         # fully connected layers.
-        pool_shape = relu.get_shape().as_list()
+        pool_shape = pool.get_shape().as_list()
         reshape = tf.reshape(
-                relu,
+                pool,
                 [pool_shape[0], pool_shape[1] * pool_shape[2] * pool_shape[3]])
         # Fully connected layer. Note that the '+' operation automatically
         # broadcasts the biases.
@@ -203,10 +227,10 @@ def main(argv=None):  # pylint: disable=unused-argument
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits, train_labels_node))
 
-    # L2 regularization for the fully connected parameters.
+    # # L2 regularization for the fully connected parameters.
     # regularizers = (tf.nn.l2_loss(fc1_weights) + tf.nn.l2_loss(fc1_biases) +
     #                 tf.nn.l2_loss(fc2_weights) + tf.nn.l2_loss(fc2_biases))
-    # Add the regularization term to the loss.
+    # # Add the regularization term to the loss.
     # loss += 5e-4 * regularizers
 
     # Optimizer: set up a variable that's incremented once per batch and
@@ -217,7 +241,7 @@ def main(argv=None):  # pylint: disable=unused-argument
             0.01,  # Base learning rate.
             batch * BATCH_SIZE,  # Current index into the dataset.
             train_size,  # Decay step.
-            0.95,  # Decay rate.
+            1.0,  # Decay rate.
             staircase=True)
     # Use simple momentum for the optimization.
     optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
@@ -252,6 +276,9 @@ def main(argv=None):  # pylint: disable=unused-argument
 
     # Create a local session to run the training.
     start_time = time.time()
+
+    saver = tf.train.Saver()
+
     with tf.Session() as sess:
         # Run all the initializers to prepare the trainable parameters.
         tf.initialize_all_variables().run()
@@ -273,6 +300,8 @@ def main(argv=None):  # pylint: disable=unused-argument
                     feed_dict=feed_dict)
             print step
             if step % EVAL_FREQUENCY == 0:
+                save_path = saver.save(sess, "a3/model-2.ckpt")
+                print("Model saved in file: %s" % save_path)
                 elapsed_time = time.time() - start_time
                 start_time = time.time()
                 print('Step %d (epoch %.2f), %.1f ms' %

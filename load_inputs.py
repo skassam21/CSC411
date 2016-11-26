@@ -5,6 +5,7 @@ from scipy import ndimage
 import numpy as np
 import tensorflow as tf
 from scipy import misc
+PIXEL_DEPTH = 255
 
 
 def extract_data(begin, end):
@@ -12,14 +13,32 @@ def extract_data(begin, end):
   """
     filenames = [os.path.join('411a3/train/%05d.jpg' % i) for i in xrange(begin + 1, end + 1)]
 
-    data = np.zeros((end - begin, 64, 64, 3))
+    data = np.zeros((end - begin, 32, 32, 3))
     for i, filename in enumerate(filenames):
         image = ndimage.imread(filename, flatten=False)
-        image = misc.imresize(image, 0.5)
+        image = misc.imresize(image, 0.25)
         # image = image.reshape(64, 64, 1)
         # imgplot = plt.imshow(image)
         # plt.pause(10000)
         data[i] = image
+        data[i] = (data[i] - (PIXEL_DEPTH / 2.0)) / PIXEL_DEPTH
+    return tf.to_float(data)
+
+
+def extract_testing_data(begin, end):
+    """Extract the images into a 4D tensor [image index, y, x, channels].
+  """
+    filenames = [os.path.join('411a3/val/%05d.jpg' % i) for i in xrange(begin + 1, end + 1)]
+
+    data = np.zeros((end - begin, 32, 32, 3))
+    for i, filename in enumerate(filenames):
+        image = ndimage.imread(filename, flatten=False)
+        image = misc.imresize(image, 0.25)
+        # image = image.reshape(64, 64, 1)
+        # imgplot = plt.imshow(image)
+        # plt.pause(10000)
+        data[i] = image
+        data[i] = (data[i] - (PIXEL_DEPTH / 2.0)) / PIXEL_DEPTH
     return tf.to_float(data)
 
 
@@ -73,8 +92,17 @@ def _generate_image_and_label_batch(image, label, min_queue_examples,
 
 
 def get_inputs(batch_size):
-    train_data = extract_data(0, 7000)
-    train_labels = extract_labels(0, 7000)
+    train_data = extract_data(0, 6000)
+    train_labels = extract_labels(0, 6000)
+
+    return _generate_image_and_label_batch(train_data, train_labels,
+                                           int(50000 * 0.4), batch_size,
+                                           shuffle=True)
+
+
+def get_test(batch_size):
+    train_data = extract_data(6000, 7000)
+    train_labels = extract_labels(6000, 7000)
 
     return _generate_image_and_label_batch(train_data, train_labels,
                                            int(50000 * 0.4), batch_size,

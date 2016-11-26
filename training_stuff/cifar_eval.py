@@ -41,22 +41,23 @@ import time
 import numpy as np
 import tensorflow as tf
 
+from load_inputs import get_test
 from training_stuff import cifar
-
-FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('eval_dir', '/tmp/cifar10_eval',
                            """Directory where to write event logs.""")
 tf.app.flags.DEFINE_string('eval_data', 'test',
                            """Either 'test' or 'train_eval'.""")
-tf.app.flags.DEFINE_string('checkpoint_dir', '/tmp/cifar10_train',
+tf.app.flags.DEFINE_string('checkpoint_dir', 'tmp/',
                            """Directory where to read model checkpoints.""")
 tf.app.flags.DEFINE_integer('eval_interval_secs', 60 * 5,
                             """How often to run the eval.""")
-tf.app.flags.DEFINE_integer('num_examples', 10000,
+tf.app.flags.DEFINE_integer('num_examples', 1000,
                             """Number of examples to run.""")
 tf.app.flags.DEFINE_boolean('run_once', False,
                          """Whether to run eval only once.""")
+
+FLAGS = tf.app.flags.FLAGS
 
 
 def eval_once(saver, summary_writer, top_k_op, summary_op):
@@ -77,6 +78,7 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
       #   /my-favorite-path/cifar10_train/model.ckpt-0,
       # extract global_step from it.
       global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+      print(global_step)
     else:
       print('No checkpoint file found')
       return
@@ -89,14 +91,17 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
         threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
                                          start=True))
 
-      num_iter = int(math.ceil(FLAGS.num_examples / FLAGS.batch_size))
+      num_iter = 1
       true_count = 0  # Counts the number of correct predictions.
-      total_sample_count = num_iter * FLAGS.batch_size
+      total_sample_count = 1000
+      print(total_sample_count)
       step = 0
       while step < num_iter and not coord.should_stop():
         predictions = sess.run([top_k_op])
+        print(predictions)
         true_count += np.sum(predictions)
         step += 1
+      print(true_count)
 
       # Compute precision @ 1.
       precision = true_count / total_sample_count
@@ -118,7 +123,7 @@ def evaluate():
   with tf.Graph().as_default() as g:
     # Get images and labels for CIFAR-10.
     eval_data = FLAGS.eval_data == 'test'
-    images, labels = cifar.inputs(eval_data=eval_data)
+    images, labels = get_test(1000)
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
@@ -146,7 +151,7 @@ def evaluate():
 
 
 def main(argv=None):  # pylint: disable=unused-argument
-  cifar.maybe_download_and_extract()
+  # cifar.maybe_download_and_extract()
   if tf.gfile.Exists(FLAGS.eval_dir):
     tf.gfile.DeleteRecursively(FLAGS.eval_dir)
   tf.gfile.MakeDirs(FLAGS.eval_dir)
