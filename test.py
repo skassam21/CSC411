@@ -160,6 +160,17 @@ def model(data, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
         hidden = tf.nn.dropout(hidden, 0.5, seed=SEED)
     return tf.matmul(hidden, fc2_weights) + fc2_biases
 
+def save_data(eval_labels):
+    with open('labels_test.csv', 'wb') as csvfile:
+        spamwriter = csv.writer(csvfile)
+        spamwriter.writerow(["Id", "Prediction"])
+        i = 1
+        for data in eval_labels:
+            spamwriter.writerow([i, data])
+            i += 1
+        for i in range(971, 2971):
+            spamwriter.writerow([i, 0])
+
 
 def main(argv=None):  # pylint: disable=unused-argument
     test_data = extract_test_data(0, 970)
@@ -198,7 +209,7 @@ def main(argv=None):  # pylint: disable=unused-argument
         eval_prediction = tf.nn.softmax(model(eval_data, conv1_weights, conv1_biases, conv2_weights,
                                               conv2_biases, fc1_weights, fc1_biases, fc2_weights, fc2_biases))
 
-        print(eval_in_batches(test_data, sess))
+        save_data(eval_in_batches(test_data, sess))
 
 
 if __name__ == '__main__':

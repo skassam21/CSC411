@@ -10,15 +10,15 @@ import os
 import csv
 import tensorflow as tf
 
-NUM_CHANNELS = 3
+NUM_CHANNELS = 1
 IMAGE_SIZE = 64
 IMAGE_RED = 0.5
 NUM_LABELS = 8
 VALIDATION_SIZE = 1000  # Size of the validation set.
 BATCH_SIZE = 300
 NUM_EPOCHS = 3000
-EVAL_BATCH_SIZE = 300
-EVAL_FREQUENCY = 100  # Number of steps between evaluations.
+EVAL_BATCH_SIZE = 1000
+EVAL_FREQUENCY = 10  # Number of steps between evaluations.
 SEED = 66478  # Set to None for random seed.
 PIXEL_DEPTH = 255
 
@@ -157,7 +157,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     # initial value which will be assigned when we call:
     # {tf.initialize_all_variables().run()}
     conv1_weights = tf.Variable(
-            tf.truncated_normal([5, 5, NUM_CHANNELS, 15],  # 5x5 filter, depth 8.
+            tf.truncated_normal([5, 5, NUM_CHANNELS, 15],  # 5x5 filter, depth 15.
                                 stddev=0.1,
                                 seed=SEED, dtype=data_type()))
     conv1_biases = tf.Variable(tf.zeros([15], dtype=data_type()))

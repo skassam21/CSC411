@@ -17,7 +17,7 @@ NUM_LABELS = 8
 VALIDATION_SIZE = 1000  # Size of the validation set.
 BATCH_SIZE = 300
 NUM_EPOCHS = 3000
-EVAL_BATCH_SIZE = 300
+EVAL_BATCH_SIZE = 1000
 EVAL_FREQUENCY = 10  # Number of steps between evaluations.
 SEED = 66478  # Set to None for random seed.
 PIXEL_DEPTH = 255
@@ -134,16 +134,22 @@ def main(argv=None):  # pylint: disable=unused-argument
     # initial value which will be assigned when we call:
     # {tf.initialize_all_variables().run()}
     fc1_weights = tf.Variable(  # fully connected, depth 512.
-            tf.truncated_normal([INPUT_SIZE, 512],
+            tf.truncated_normal([INPUT_SIZE, 10],
                                 stddev=0.1,
                                 seed=SEED,
                                 dtype=data_type()))
-    fc1_biases = tf.Variable(tf.constant(0.1, shape=[512], dtype=data_type()))
-    fc2_weights = tf.Variable(tf.truncated_normal([512, NUM_LABELS],
+    fc1_biases = tf.Variable(tf.constant(0.1, shape=[10], dtype=data_type()))
+    fc2_weights = tf.Variable(  # fully connected, depth 100.
+            tf.truncated_normal([10, 20],
+                                stddev=0.1,
+                                seed=SEED,
+                                dtype=data_type()))
+    fc2_biases = tf.Variable(tf.constant(0.1, shape=[20], dtype=data_type()))
+    fc3_weights = tf.Variable(tf.truncated_normal([20, NUM_LABELS],
                                                   stddev=0.1,
                                                   seed=SEED,
                                                   dtype=data_type()))
-    fc2_biases = tf.Variable(tf.constant(
+    fc3_biases = tf.Variable(tf.constant(
             0.1, shape=[NUM_LABELS], dtype=data_type()))
 
     # We will replicate the model structure for the training subgraph, as well
@@ -153,11 +159,13 @@ def main(argv=None):  # pylint: disable=unused-argument
         # Fully connected layer. Note that the '+' operation automatically
         # broadcasts the biases.
         hidden = tf.nn.relu(tf.matmul(data, fc1_weights) + fc1_biases)
+        hidden2 = tf.nn.relu(tf.matmul(hidden, fc2_weights) + fc2_biases)
+
         # Add a 50% dropout during training only. Dropout also scales
         # activations such that no rescaling is needed at evaluation time.
-        if train:
-            hidden = tf.nn.dropout(hidden, 0.5, seed=SEED)
-        return tf.matmul(hidden, fc2_weights) + fc2_biases
+        # if train:
+        #     hidden = tf.nn.dropout(hidden, 0.5, seed=SEED)
+        return tf.matmul(hidden2, fc3_weights) + fc3_biases
 
     # Training computation: logits + cross-entropy loss.
     logits = model(train_data_node, True)
@@ -175,20 +183,22 @@ def main(argv=None):  # pylint: disable=unused-argument
     batch = tf.Variable(0, dtype=data_type())
     # Decay once per epoch, using an exponential schedule starting at 0.01.
     learning_rate = tf.train.exponential_decay(
-            0.01,  # Base learning rate.
+            0.05,  # Base learning rate.
             batch * BATCH_SIZE,  # Current index into the dataset.
             train_size,  # Decay step.
             1.0,  # Decay rate.
             staircase=True)
 
     # Use simple momentum for the optimization.
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
+    optimizer = tf.train.MomentumOptimizer(learning_rate, 0.01).minimize(loss, global_step=batch)
 
     # Predictions for the current training minibatch.
     train_prediction = tf.nn.softmax(logits)
 
     # Predictions for the test and validation, which we'll compute less often.
     eval_prediction = tf.nn.softmax(model(eval_data))
+
+    saver = tf.train.Saver()
 
     # Small utility function to evaluate a dataset by feeding batches of data to
     # {eval_data} and pulling the results from {eval_predictions}.
@@ -235,6 +245,8 @@ def main(argv=None):  # pylint: disable=unused-argument
                     feed_dict=feed_dict)
             print step
             if step % EVAL_FREQUENCY == 0:
+                save_path = saver.save(sess, "a3/model-gist-3.ckpt")
+                print("Model saved in file: %s" % save_path)
                 elapsed_time = time.time() - start_time
                 start_time = time.time()
                 print('Step %d (epoch %.2f), %.1f ms' %
