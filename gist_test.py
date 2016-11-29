@@ -123,8 +123,8 @@ def main(argv=None):  # pylint: disable=unused-argument
         return np.argmax(batch_predictions, 1) + 1
 
     with tf.Session() as sess:
-        new_saver = tf.train.import_meta_graph('gist/model-gist-valid-correct-11400.ckpt.meta')
-        new_saver.restore(sess, 'gist/model-gist-valid-correct-11400.ckpt')
+        new_saver = tf.train.import_meta_graph('gist/model-gist-valid-correct-7500.ckpt.meta')
+        new_saver.restore(sess, 'gist/model-gist-valid-correct-7500.ckpt')
 
         # The variables below hold all the trainable weights. They are passed an
         # initial value which will be assigned when we call:

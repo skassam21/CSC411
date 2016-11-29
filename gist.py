@@ -66,7 +66,7 @@ def extract_all_data():
         reader = csv.reader(f)
         original_data = list(reader)
 
-    flip_keys = [2, 3, 5, 6, 7]
+    flip_keys = [0, 1, 2, 3, 4, 5, 6, 7]
     all_data = []
     all_labels = []
     with open('train_flipped.csv', 'rb') as f:
@@ -77,14 +77,23 @@ def extract_all_data():
             all_data.append(d)
             all_labels.append(l)
 
+    # rotate_keys = [0, 1, 2, 3, 4, 5, 6, 7]
+    # with open('train_rot90.csv', 'rb') as f:
+    #     reader = csv.reader(f)
+    #     rotated_data = list(reader)
+    # for l, d in zip(labels, rotated_data):
+    #     if l in rotate_keys:
+    #         all_data.append(d)
+    #         all_labels.append(l)
+
     all_data.extend(original_data)
     all_labels.extend(labels)
     if FLAGS.use_fp16:
         all_data = np.array(all_data, dtype=np.float16)
     else:
         all_data = np.array(all_data, dtype=np.float32)
-
     return all_data, np.array(all_labels)
+
 
 def data_type():
     """Return the type of the activations, weights, and placeholder variables."""
@@ -179,7 +188,9 @@ def main(argv=None):  # pylint: disable=unused-argument
 
         num_epochs = NUM_EPOCHS
     train_size = train_labels.shape[0]
-    sm = SMOTE(kind='regular', ratio=0.75)
+    sm = SMOTE(kind='regular', ratio=1.0)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
     train_data, train_labels = sm.fit_sample(train_data, train_labels)
     train_data, train_labels = sm.fit_sample(train_data, train_labels)
     train_data, train_labels = sm.fit_sample(train_data, train_labels)
@@ -245,7 +256,12 @@ def main(argv=None):  # pylint: disable=unused-argument
         return tf.matmul(hidden3, fc4_weights) + fc4_biases
 
     # Training computation: logits + cross-entropy loss.
+    # class_weight = tf.constant([1.0, 1.08, 3.02, 5.206896552, 1.265110712, 20, 40,
+    #                             30])
+
     logits = model(train_data_node, True)
+    # weighted_logits = tf.mul(logits, class_weight) # shape [batch_size, 5]
+
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits, train_labels_node))
 
