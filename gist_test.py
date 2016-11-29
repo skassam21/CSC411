@@ -34,7 +34,7 @@ def extract_test_data():
     """Extract the images into a 4D tensor [image index, y, x, channels].
     Values are rescaled from [0, 255] down to [-0.5, 0.5].
   """
-    with open('test.csv', 'rb') as f:
+    with open('test_256by256.csv', 'rb') as f:
         reader = csv.reader(f)
         data = list(reader)
     if FLAGS.use_fp16:
@@ -92,7 +92,7 @@ def model(data, fc1_weights, fc1_biases, fc2_weights, fc2_biases, fc3_weights,
 
 
 def save_data(eval_labels):
-    with open('labels_test.csv', 'wb') as csvfile:
+    with open('labels_test2.csv', 'wb') as csvfile:
         spamwriter = csv.writer(csvfile)
         spamwriter.writerow(["Id", "Prediction"])
         i = 1
@@ -122,8 +122,8 @@ def main(argv=None):  # pylint: disable=unused-argument
         return np.argmax(batch_predictions, 1) + 1
 
     with tf.Session() as sess:
-        new_saver = tf.train.import_meta_graph('a3/model-gist-3.ckpt.meta')
-        new_saver.restore(sess, 'a3/model-gist-3.ckpt')
+        new_saver = tf.train.import_meta_graph('a3/model-2.ckpt.meta')
+        new_saver.restore(sess, 'a3/model-2.ckpt')
 
         # The variables below hold all the trainable weights. They are passed an
         # initial value which will be assigned when we call:

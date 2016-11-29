@@ -1,0 +1,6 @@
+model_checkpoint_path: "model-gist-valid-correct-7900.ckpt"
+all_model_checkpoint_paths: "model-gist-valid-correct-7500.ckpt"
+all_model_checkpoint_paths: "model-gist-valid-correct-7600.ckpt"
+all_model_checkpoint_paths: "model-gist-valid-correct-7700.ckpt"
+all_model_checkpoint_paths: "model-gist-valid-correct-7800.ckpt"
+all_model_checkpoint_paths: "model-gist-valid-correct-7900.ckpt"

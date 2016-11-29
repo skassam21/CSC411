@@ -1,2 +1,2 @@
-model_checkpoint_path: "model-gist-3.ckpt"
-all_model_checkpoint_paths: "model-gist-3.ckpt"
+model_checkpoint_path: "model-2.ckpt"
+all_model_checkpoint_paths: "model-2.ckpt"

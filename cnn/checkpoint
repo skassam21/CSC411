@@ -1,0 +1,4 @@
+model_checkpoint_path: "model-16-32-200.ckpt"
+all_model_checkpoint_paths: "model-16-32-0.ckpt"
+all_model_checkpoint_paths: "model-16-32-100.ckpt"
+all_model_checkpoint_paths: "model-16-32-200.ckpt"
