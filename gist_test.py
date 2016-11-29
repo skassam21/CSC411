@@ -34,7 +34,7 @@ def extract_test_data():
     """Extract the images into a 4D tensor [image index, y, x, channels].
     Values are rescaled from [0, 255] down to [-0.5, 0.5].
   """
-    with open('test_256by256.csv', 'rb') as f:
+    with open('test.csv', 'rb') as f:
         reader = csv.reader(f)
         data = list(reader)
     if FLAGS.use_fp16:
@@ -77,18 +77,19 @@ def shuffle_data(train_data, train_labels):
 # We will replicate the model structure for the training subgraph, as well
     # as the evaluation subgraphs, while sharing the trainable parameters.
 def model(data, fc1_weights, fc1_biases, fc2_weights, fc2_biases, fc3_weights,
-          fc3_biases, train=False):
+          fc3_biases, fc4_weights, fc4_biases, train=False):
     """The Model definition."""
     # Fully connected layer. Note that the '+' operation automatically
     # broadcasts the biases.
     hidden = tf.nn.relu(tf.matmul(data, fc1_weights) + fc1_biases)
     hidden2 = tf.nn.relu(tf.matmul(hidden, fc2_weights) + fc2_biases)
+    hidden3 = tf.nn.relu(tf.matmul(hidden2, fc3_weights) + fc3_biases)
 
     # Add a 50% dropout during training only. Dropout also scales
     # activations such that no rescaling is needed at evaluation time.
     # if train:
     #     hidden = tf.nn.dropout(hidden, 0.5, seed=SEED)
-    return tf.matmul(hidden2, fc3_weights) + fc3_biases
+    return tf.matmul(hidden3, fc4_weights) + fc4_biases
 
 
 def save_data(eval_labels):
@@ -122,8 +123,8 @@ def main(argv=None):  # pylint: disable=unused-argument
         return np.argmax(batch_predictions, 1) + 1
 
     with tf.Session() as sess:
-        new_saver = tf.train.import_meta_graph('a3/model-2.ckpt.meta')
-        new_saver.restore(sess, 'a3/model-2.ckpt')
+        new_saver = tf.train.import_meta_graph('gist/model-gist-valid-correct-11400.ckpt.meta')
+        new_saver.restore(sess, 'gist/model-gist-valid-correct-11400.ckpt')
 
         # The variables below hold all the trainable weights. They are passed an
         # initial value which will be assigned when we call:
@@ -134,9 +135,12 @@ def main(argv=None):  # pylint: disable=unused-argument
         fc2_biases = tf.trainable_variables()[3].value()
         fc3_weights = tf.trainable_variables()[4].value()
         fc3_biases = tf.trainable_variables()[5].value()
+        fc4_weights = tf.trainable_variables()[6].value()
+        fc4_biases = tf.trainable_variables()[7].value()
+
         # Run all the initializers to prepare the trainable parameters.
         eval_prediction = tf.nn.softmax(model(eval_data, fc1_weights, fc1_biases, fc2_weights, fc2_biases,
-                                              fc3_weights, fc3_biases))
+                                              fc3_weights, fc3_biases, fc4_weights, fc4_biases))
 
         eval_labels = eval_in_batches(test_data, sess)
         save_data(eval_labels)

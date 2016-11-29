@@ -6,6 +6,7 @@ import matplotlib.image as mpimg
 
 import sys
 import numpy as np
+from imblearn.over_sampling import SMOTE
 from scipy import ndimage
 from scipy import misc
 import os
@@ -23,7 +24,6 @@ EVAL_BATCH_SIZE = 1000
 EVAL_FREQUENCY = 100  # Number of steps between evaluations.
 SEED = 66478  # Set to None for random seed.
 PIXEL_DEPTH = 255
-LOSS_ARRAY = np.array([1, 1, 1, 1, 1, 1, 1, 1])
 
 tf.app.flags.DEFINE_boolean("self_test", False, "True if running a self test.")
 tf.app.flags.DEFINE_boolean('use_fp16', False,
@@ -97,10 +97,10 @@ def data_type():
 def error_rate(predictions, labels):
     """Return the error rate based on dense predictions and sparse labels."""
     print np.argmax(predictions, 1)[1:100]
-    print np.argmax(labels, 1)[1:100]
+    print labels[1:100]
     return 100.0 - (
         100.0 *
-        np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1)) /
+        np.sum(np.argmax(predictions, 1) == labels) /
         predictions.shape[0])
 
 
@@ -135,7 +135,8 @@ def shuffle_data(train_data, train_labels, percentage_validation, number_classes
     validation_data = np.concatenate(([v for v in validation_data]))
     np.random.shuffle(training_data)
     np.random.shuffle(validation_data)
-    return validation_data[:, :-1], validation_data[:, -1], training_data[:, :-1], training_data[:, -1]
+    return validation_data[:, :-1], np.array(validation_data[:, -1], dtype=np.int64), \
+           training_data[:, :-1], np.array(training_data[:, -1], dtype=np.int64)
 
 
 def DisplayPlot(train, valid, ylabel, number=0):
@@ -159,13 +160,6 @@ def DisplayPlot(train, valid, ylabel, number=0):
     plt.pause(0.0001)
 
 
-def convert_to_hot_encoding(labels):
-    final_labels = np.zeros((labels.shape[0], NUM_LABELS))
-    for i, label in enumerate(labels):
-        final_labels[i, label] = 1
-    return final_labels
-
-
 def main(argv=None):  # pylint: disable=unused-argument
     if FLAGS.self_test:
         print('Running self-test.')
@@ -180,17 +174,20 @@ def main(argv=None):  # pylint: disable=unused-argument
         # test_data = extract_data(100, 200)
         # test_labels = extract_labels(100, 200)
 
-
         validation_data, validation_labels, \
             train_data, train_labels = shuffle_data(train_data, train_labels, VALIDATION_PERCENTAGE, NUM_LABELS)
 
         num_epochs = NUM_EPOCHS
     train_size = train_labels.shape[0]
-    train_labels = convert_to_hot_encoding(train_labels)
-    validation_labels = convert_to_hot_encoding(validation_labels)
+    sm = SMOTE(kind='regular', ratio=0.75)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
+    train_data, train_labels = sm.fit_sample(train_data, train_labels)
     print(train_size)
-    print(train_data.shape)
-    print(validation_data.shape)
+    print(np.bincount(train_labels))
+    print(np.bincount(validation_labels))
 
     # This is where training samples and labels are fed to the graph.
     # These placeholder nodes will be fed a batch of training data at each
@@ -198,7 +195,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     train_data_node = tf.placeholder(
             data_type(),
             shape=(BATCH_SIZE, INPUT_SIZE))
-    train_labels_node = tf.placeholder(np.int64, shape=(BATCH_SIZE, NUM_LABELS))
+    train_labels_node = tf.placeholder(np.int64, shape=(BATCH_SIZE,))
     eval_data = tf.placeholder(
             data_type(),
             shape=(EVAL_BATCH_SIZE, INPUT_SIZE))
@@ -249,11 +246,8 @@ def main(argv=None):  # pylint: disable=unused-argument
 
     # Training computation: logits + cross-entropy loss.
     logits = model(train_data_node, True)
-    error = tf.nn.softmax_cross_entropy_with_logits(
-            logits, train_labels_node)
-    print error
-    scaled_error = tf.mul(error, LOSS_ARRAY)
-    loss = tf.reduce_mean(scaled_error)
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+            logits, train_labels_node))
 
     # # L2 regularization for the fully connected parameters.
     # regularizers = (tf.nn.l2_loss(fc1_weights) + tf.nn.l2_loss(fc1_biases) +

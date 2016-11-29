@@ -2,3 +2,9 @@ tmp/*
 .idea/*
 *.pyc
 411a3/*
+a3/*
+cnn/*
+nn/*
+gist/*
+
+*.ckpt
